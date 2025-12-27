@@ -1,0 +1,139 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+}
+
+// ============================================
+// MODELS (Collections in MongoDB)
+// ============================================
+
+// User model (customers and admins)
+model User {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  email     String    @unique
+  name      String
+  phone     String?
+  password  String    // Hashed password
+  role      Role      @default(CUSTOMER)
+  bookings  Booking[] // Relation: One user has many bookings
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("users") // MongoDB collection name
+}
+
+// Enum for user roles
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+// Hall model (wedding halls)
+model Hall {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  capacity    Int       // Maximum guests
+  basePrice   Float     // Base rental price
+  images      String[]  // Array of image URLs
+  amenities   String[]  // e.g., ["AC", "Parking", "Stage"]
+  isActive    Boolean   @default(true)
+  bookings    Booking[] // Relation: One hall has many bookings
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("halls")
+}
+
+// Food Item model
+model FoodItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  category    String   // "Appetizer", "Main Course", "Dessert", "Beverage"
+  price       Float    // Price per plate/unit
+  isVeg       Boolean  @default(true)
+  description String?
+  image       String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("foodItems")
+}
+
+// Theme/Decoration model
+model Theme {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  price       Float
+  images      String[] // Multiple images for the theme
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("themes")
+}
+
+// Booking model (main transaction)
+model Booking {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  bookingNumber   String        @unique // e.g., "BK20240315001"
+  
+  // Relations
+  userId          String        @db.ObjectId
+  user            User          @relation(fields: [userId], references: [id])
+  
+  hallId          String        @db.ObjectId
+  hall            Hall          @relation(fields: [hallId], references: [id])
+  
+  // Event details
+  eventDate       DateTime      // Date of the event
+  timeSlot        String        // "Morning" (9AM-2PM), "Evening" (6PM-11PM), "Full Day"
+  guestCount      Int
+  eventType       String        // "Wedding", "Reception", "Birthday", "Corporate"
+  
+  // Selections (stored as JSON for flexibility)
+  selectedFoods   Json          // Array: [{id, name, quantity, price}]
+  selectedTheme   Json?         // Object: {id, name, price}
+  
+  // Pricing
+  totalAmount     Float
+  advanceAmount   Float?        // If partial payment
+  
+  // Status
+  status          BookingStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentId       String?       // Stripe/Razorpay payment ID
+  
+  // Customer info (denormalized for invoice generation)
+  customerDetails Json          // {name, email, phone, address}
+  specialRequests String?       // Any special requirements
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("bookings")
+}
+
+// Enums for booking status
+enum BookingStatus {
+  PENDING      // Just created, awaiting payment
+  CONFIRMED    // Payment received, booking confirmed
+  COMPLETED    // Event has happened
+  CANCELLED    // Cancelled by user or admin
+}
+
+enum PaymentStatus {
+  PENDING   // Payment not yet made
+  PAID      // Full payment received
+  PARTIAL   // Partial payment received
+  FAILED    // Payment attempt failed
+  REFUNDED  // Payment refunded
+}
